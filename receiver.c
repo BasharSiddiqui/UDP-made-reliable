@@ -14,8 +14,9 @@
 #include <time.h>
 
 #define BUFFER_SIZE 500
-
-struct packet {
+// packet structure
+struct packet
+{
     int sequence_no;
     int packet_size;
     char data[BUFFER_SIZE];
@@ -41,29 +42,34 @@ int no_of_acks;
 int acks[10];
 int temp_ack;
 
-void *get_in_addr(struct sockaddr *sa) {
-    if (sa->sa_family == AF_INET) {
+void *get_in_addr(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET)
+    {
         return &(((struct sockaddr_in *)sa)->sin_addr);
     }
 
     return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
-
-void *receivePackets(void *vargp) {
-    for (int i = 0; i < no_of_packets; i++) {
+void *receivePackets(void *vargp)
+{
+    for (int i = 0; i < no_of_packets; i++)
+    {
     RECEIVE:
-        if ((no_of_bytes = recvfrom(socket_fd, &temp_packet, sizeof(struct packet), 0, (struct sockaddr *)&cli_addr, &cli_addr_len)) < 0) {
+        if ((no_of_bytes = recvfrom(socket_fd, &temp_packet, sizeof(struct packet), 0, (struct sockaddr *)&cli_addr, &cli_addr_len)) < 0)
+        {
             perror("UDP Server: recvfrom");
             exit(1);
         }
-
-        if (packets[temp_packet.sequence_no].packet_size != 0) {
+        if (packets[temp_packet.sequence_no].packet_size != 0)
+        {
             // Process duplicate packet
             packets[temp_packet.sequence_no] = temp_packet;
             temp_ack = temp_packet.sequence_no;
             acks[temp_ack] = 1;
 
-            if (sendto(socket_fd, &temp_ack, sizeof(int), 0, (struct sockaddr *)&cli_addr, cli_addr_len) < 0) {
+            if (sendto(socket_fd, &temp_ack, sizeof(int), 0, (struct sockaddr *)&cli_addr, cli_addr_len) < 0)
+            {
                 perror("UDP Server: sendto");
                 exit(1);
             }
@@ -72,13 +78,15 @@ void *receivePackets(void *vargp) {
             goto RECEIVE;
         }
 
-        if (temp_packet.packet_size == -1) {
+        if (temp_packet.packet_size == -1)
+        {
             printf("END OF FILE REACHED\n");
             no_of_packets = temp_packet.sequence_no + 1;
-             // Exit loop when end of file is reached
+            // Exit loop when end of file is reached
         }
 
-        if (no_of_bytes > 0) {
+        if (no_of_bytes > 0)
+        {
             // printf("Packet Received:%d\n", temp_packet.sequence_no);  // Commented out for faster processing
             packets[temp_packet.sequence_no] = temp_packet;
         }
@@ -86,8 +94,11 @@ void *receivePackets(void *vargp) {
     return NULL;
 }
 
-int main(int argc, char *argv[]) {
-    if (argc != 2) {
+int main(int argc, char *argv[])
+{
+    // Check for correct number of arguments
+    if (argc != 2)
+    {
         fprintf(stderr, "Usage: %s <port>\n", argv[0]);
         return 1;
     }
@@ -96,19 +107,23 @@ int main(int argc, char *argv[]) {
     serv_addr.ai_family = AF_UNSPEC;
     serv_addr.ai_socktype = SOCK_DGRAM;
     serv_addr.ai_flags = AI_PASSIVE;
-
-    if ((rv = getaddrinfo(NULL, argv[1], &serv_addr, &serv_info)) != 0) {
+    // Get address information
+    if ((rv = getaddrinfo(NULL, argv[1], &serv_addr, &serv_info)) != 0)
+    {
         fprintf(stderr, "UDP Server: getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }
-
-    for (ptr = serv_info; ptr != NULL; ptr = ptr->ai_next) {
-        if ((socket_fd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol)) == -1) {
+    // Create socket
+    for (ptr = serv_info; ptr != NULL; ptr = ptr->ai_next)
+    {
+        if ((socket_fd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol)) == -1)
+        {
             perror("UDP Server: socket");
             continue;
         }
 
-        if (bind(socket_fd, ptr->ai_addr, ptr->ai_addrlen) == -1) {
+        if (bind(socket_fd, ptr->ai_addr, ptr->ai_addrlen) == -1)
+        {
             close(socket_fd);
             perror("UDP Server: bind");
             continue;
@@ -117,7 +132,8 @@ int main(int argc, char *argv[]) {
         break;
     }
 
-    if (ptr == NULL) {
+    if (ptr == NULL)
+    {
         fprintf(stderr, "UDP Server: Failed to bind socket\n");
         return 2;
     }
@@ -134,7 +150,8 @@ int main(int argc, char *argv[]) {
 
     FILE *out = fopen("output_video.mp4", "wb");
 
-    if ((no_of_bytes = recvfrom(socket_fd, &file_size, sizeof(off_t), 0, (struct sockaddr *)&cli_addr, &cli_addr_len)) < 0) {
+    if ((no_of_bytes = recvfrom(socket_fd, &file_size, sizeof(off_t), 0, (struct sockaddr *)&cli_addr, &cli_addr_len)) < 0)
+    {
         perror("UDP Server: recvfrom");
         exit(1);
     }
@@ -143,42 +160,49 @@ int main(int argc, char *argv[]) {
     no_of_bytes = 1;
     remaining = file_size;
     int window_count = 1;
-
-    while (remaining > 0 || (no_of_packets == 10)) {
+    // Receive packets
+    while (remaining > 0 || (no_of_packets == 10))
+    {
         memset(packets, 0, sizeof(packets));
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 10; i++)
+        {
             packets[i].packet_size = 0;
         }
 
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 10; i++)
+        {
             acks[i] = 0;
         }
-
         pthread_create(&thread_id, NULL, receivePackets, NULL);
 
         nanosleep(&time1, &time2);
 
         no_of_acks = 0;
-
-        RESEND_ACK:
-        for (int i = 0; i < no_of_packets; i++) {
+        // Resend acks
+    RESEND_ACK:
+        for (int i = 0; i < no_of_packets; i++)
+        {
             temp_ack = packets[i].sequence_no;
-            if (acks[temp_ack] != 1) {
-                if (packets[i].packet_size != 0) {
+            if (acks[temp_ack] != 1)
+            {
+                if (packets[i].packet_size != 0)
+                {
                     acks[temp_ack] = 1;
 
-                    if (sendto(socket_fd, &temp_ack, sizeof(int), 0, (struct sockaddr *)&cli_addr, cli_addr_len) > 0) {
+                    if (sendto(socket_fd, &temp_ack, sizeof(int), 0, (struct sockaddr *)&cli_addr, cli_addr_len) > 0)
+                    {
                         no_of_acks++;
                         // printf("Ack sent: %d\n", temp_ack);  // Commented out for faster processing
                     }
                 }
             }
         }
-
+        // wait for 30ms
         nanosleep(&time1, &time2);
         nanosleep(&time1, &time2);
 
-        if (no_of_acks < no_of_packets) {
+        if (no_of_acks < no_of_packets)
+        {
             goto RESEND_ACK;
         }
 
@@ -186,8 +210,10 @@ int main(int argc, char *argv[]) {
 
         printf("Window Frame %d Transferred: %d%%\n", window_count++, (received * 100) / file_size);
 
-        for (int i = 0; i < no_of_packets; i++) {
-            if (packets[i].packet_size != 0 && packets[i].packet_size != -1) {
+        for (int i = 0; i < no_of_packets; i++)
+        {
+            if (packets[i].packet_size != 0 && packets[i].packet_size != -1)
+            {
                 fwrite(packets[i].data, 1, packets[i].packet_size, out);
                 remaining = remaining - packets[i].packet_size;
                 received = received + packets[i].packet_size;
@@ -201,4 +227,3 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
-
