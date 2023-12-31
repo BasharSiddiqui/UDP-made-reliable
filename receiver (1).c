@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
 
     while (remaining > 0 || (no_of_packets == 10)) {
         memset(packets, 0, sizeof(packets));
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 10; i++) {
             packets[i].packet_size = 0;
         }
 
